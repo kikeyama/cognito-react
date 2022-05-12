@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import logo from '../logo.svg';
 import '../App.css';
 import Amplify, { Auth } from 'aws-amplify';
@@ -24,6 +24,10 @@ Amplify.configure({
 
 function App() {
   const [user, setUser] = useState();
+  const [time, setTime] = useState();
+  const [err, setErr] = useState();
+
+  const mounted = useRef(false)
 
   const signIn = async () => {
       try {
@@ -43,25 +47,41 @@ function App() {
   }
 
   const getUser = async () => {
-    try {
-      const userData = await Auth.currentAuthenticatedUser({
-        bypassCache: false,
-      });
-      return userData;
-    } catch(error) {
-      console.log('ERROR: ' + error);
-    }
-  }
-
-  useEffect(() => {
-    Auth.currentAuthenticatedUser({
+    const userData = await Auth.currentAuthenticatedUser({
       bypassCache: false,
     }).then(userData => {
       console.log(userData);
       setUser(userData);
+      const accessToken = userData.signInUserSession.accessToken.jwtToken;
+      getTime(accessToken);
     }).catch(error => {
       console.log('ERROR: ' + error);
     });
+  }
+
+  const getTime = async (token) => {
+    try {
+      const timeEndpoint = `https://${process.env.REACT_APP_API_GATEWAY_FQDN}/api/time`;
+
+      const timeResponse = await fetch(timeEndpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      timeResponse.json().then(data => {
+        setTime(data.cur_date);
+      });
+
+    } catch (e) {
+      setTime(null);
+      console.log(e.message + ' in getTime');
+      setErr(e.error);
+    }
+  }
+
+  useEffect(() => {
+    getUser();
   }, []);
 
   return (
@@ -79,7 +99,7 @@ function App() {
               href="#"
               onClick={() => signOut()}
             >
-              Logout
+              {time} Logout
             </a>
           ) : (
             <a
